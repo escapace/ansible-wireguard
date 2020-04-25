@@ -1,0 +1,59 @@
+#jinja2: lstrip_blocks:"True",trim_blocks:"True"
+[Interface]
+{% for network in wireguard_networks  %}
+Address = {{network | ipaddr('network') | ipmath(1) }}/{{ network | ipaddr('prefix') }}
+{% endfor %}
+{% if wireguard_dns is defined and wireguard_dns is string and wireguard_dns | length > 0 %}
+DNS = {{ wireguard_dns }}
+{% elif wireguard_dns is defined and wireguard_dns | length > 0 %}
+DNS = {{ wireguard_dns | join(',') }}
+{% endif %}
+PrivateKey = {{wireguard_private_key}}
+ListenPort = {{wireguard_port}}
+{% if wireguard_fwmark is defined %}
+FwMark = {{wireguard_fwmark}}
+{% endif %}
+{% if wireguard_mtu is defined %}
+MTU = {{wireguard_mtu}}
+{% endif %}
+{% if wireguard_table is defined %}
+Table = {{wireguard_table}}
+{% endif %}
+{% if wireguard_preup is defined %}
+{% for wg_preup in wireguard_preup %}
+PreUp = {{ wg_preup }}
+{% endfor %}
+{% endif %}
+{% if wireguard_predown is defined %}
+{% for wg_predown in wireguard_predown %}
+PreDown = {{ wg_predown }}
+{% endfor %}
+{% endif %}
+{% if wireguard_postup is defined %}
+{% for wg_postup in wireguard_postup %}
+PostUp = {{ wg_postup }}
+{% endfor %}
+{% endif %}
+{% if wireguard_postdown is defined %}
+{% for wg_postdown in wireguard_postdown %}
+PostDown = {{ wg_postdown }}
+{% endfor %}
+{% endif %}
+{% if wireguard_save_config is defined %}
+SaveConfig = {{ wireguard_save_config | bool | ternary(true, false) }}
+{% endif %}
+
+{% for peer in wireguard_peers %}
+    [Peer]
+    PublicKey = {{peer.public_key}}
+    AllowedIPs = {{ peer.networks | join(',') }}
+    {% if peer.persistent_keepalive is defined and (peer.persistent_keepalive is number or (peer.persistent_keepalive is string and peer.persistent_keepalive | length > 0)) %}
+    PersistentKeepalive = {{ peer.persistent_keepalive }}
+    {% endif %}
+    {% if peer.wireguard_endpoint is defined and peer.wireguard_endpoint is string and peer.wireguard_endpoint | length > 0 %}
+    Endpoint = {{peer.wireguard_endpoint}}
+    {% endif %}
+    {% if peer.preshared_key is defined and peer.preshared_key is string and peer.preshared_key | length > 0 %}
+    PresharedKey = {{peer.preshared_key}}
+    {% endif %}
+{% endfor %}

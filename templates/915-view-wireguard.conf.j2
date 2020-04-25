@@ -1,0 +1,6 @@
+#jinja2: lstrip_blocks:"True",trim_blocks:"True"
+{% for peer in wireguard_peers %}
+{% for cidr in peer.networks %}
+view:addr('{{ cidr }}', policy.all(policy.PASS))
+{% endfor %}
+{% endfor %}

@@ -1,0 +1,44 @@
+domain (ip ip6) table filter {
+    chain INPUT {
+        interface $DEFAULT_V4_DEV proto udp dport $WIREGUARD_PORT ACCEPT;
+        interface $DEFAULT_V6_DEV proto udp dport $WIREGUARD_PORT ACCEPT;
+    }
+
+    chain FORWARD {
+        interface $WIREGUARD_DEV outerface $WIREGUARD_DEV DROP;
+    }
+}
+
+{% for peer in wireguard_peers %}
+{% if peer.networks | ipv4 | length > 0 %}
+domain ip table filter {
+    chain INPUT {
+        saddr @ipfilter(({{ peer.networks | ipv4 | join(' ') }})) daddr $DUMMY0_V4_CIDR proto (udp tcp) dport 53 ACCEPT;
+    }
+
+    chain FORWARD {
+        saddr @ipfilter(({{ peer.networks | ipv4 | join(' ') }})) interface $WIREGUARD_DEV outerface !$WIREGUARD_DEV ACCEPT;
+        mod conntrack ctstate (ESTABLISHED RELATED) daddr @ipfilter(({{ peer.networks | ipv4 | join(' ') }})) outerface $WIREGUARD_DEV interface !$WIREGUARD_DEV ACCEPT;
+    }
+}
+
+domain ip table nat {
+    chain POSTROUTING {
+        saddr @ipfilter(({{ peer.networks | ipv4 | join(' ') }})) outerface $DEFAULT_V4_DEV MASQUERADE;
+    }
+}
+{% endif %}
+
+{% if peer.networks | ipv6 | length > 0 %}
+domain ip6 table filter {
+    chain INPUT {
+        saddr @ipfilter(({{ peer.networks | ipv6 | join(' ') }})) daddr $DUMMY0_V6_CIDR proto (udp tcp) dport 53 ACCEPT;
+    }
+
+    chain FORWARD {
+        saddr @ipfilter(({{ peer.networks | ipv6 | join(' ') }})) interface $WIREGUARD_DEV outerface !$WIREGUARD_DEV ACCEPT;
+        mod conntrack ctstate (ESTABLISHED RELATED) daddr @ipfilter(({{ peer.networks | ipv6 | join(' ') }})) outerface $WIREGUARD_DEV interface !$WIREGUARD_DEV ACCEPT;
+    }
+}
+{% endif %}
+{% endfor %}

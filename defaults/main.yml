@@ -1,0 +1,7 @@
+---
+
+wireguard_directory: /etc/wireguard
+wireguard_interface: wg0
+wireguard_port: 51820
+wireguard_networks: 
+wireguard_peers: 

@@ -1,0 +1,123 @@
+---
+
+- name: Add WireGuard repository
+  get_url:
+    url: https://copr.fedorainfracloud.org/coprs/jdoss/wireguard/repo/epel-8/jdoss-wireguard-epel-8.repo
+    dest: /etc/yum.repos.d/wireguard.repo
+    owner: root
+    group: root
+    mode: 0644
+  register: wireguard_repository
+
+- name: install wireguard
+  package:
+    name: "{{ packages }}"
+    state: present
+    update_cache: "{{ wireguard_repository.changed }}"
+  vars:
+    packages:
+    - wireguard-tools
+    - wireguard-dkms
+
+- name: enable wireguard kernel module
+  lineinfile:
+    path: /etc/modules-load.d/wireguard.conf
+    line: wireguard
+    owner: root
+    group: root
+    mode: 0644
+    create: yes
+
+- name: enable systemd-modules-load.service
+  service:
+    name: systemd-modules-load
+    state: restarted
+    enabled: yes
+  changed_when: false
+
+- name: register if config/private key already exists on target host
+  stat:
+    path: "{{ wireguard_directory }}/{{ wireguard_interface }}.conf"
+  register: wireguard_config_file_stat
+
+- block:
+  - name: Generate WireGuard private key
+    shell: "wg genkey"
+    register: wireguard_private_key_result
+
+  - name: set private key fact
+    set_fact:
+      wireguard_private_key: "{{ wireguard_private_key_result.stdout }}"
+  when: not wireguard_config_file_stat.stat.exists
+
+- block:
+  - name: read wireguard config file
+    slurp:
+      src: "{{ wireguard_directory }}/{{ wireguard_interface }}.conf"
+    register: wireguard_config
+
+  - name: set private key fact
+    set_fact:
+      wireguard_private_key: "{{ wireguard_config['content'] | b64decode | regex_findall('PrivateKey = (.*)') | first }}"
+  when: wireguard_config_file_stat.stat.exists
+
+- name: derive wireguard public key
+  shell: "echo '{{ wireguard_private_key }}' | wg pubkey" # noqa 306
+  register: wireguard_public_key_result
+  changed_when: false
+
+- name: set public key fact
+  set_fact:
+    wireguard_public_key: "{{ wireguard_public_key_result.stdout }}"
+
+- name: create wireguard configuration directory
+  file:
+    dest: "{{ wireguard_directory }}"
+    state: directory
+    mode: 0700
+
+- name: create the wireguard configuration file
+  template:
+    src: wg.conf.j2
+    dest: "{{ wireguard_directory }}/{{ wireguard_interface }}.conf"
+    owner: root
+    group: root
+    mode: 0600
+  notify:
+    - wireguard reconfigure
+
+- name: create the wireguard ferm configuration
+  template: src=templates/ferm.conf.j2 dest=/etc/ferm/ferm.d/1100-wireguard.conf owner=root group=root
+  notify:
+    - ferm restart
+
+- name: create the wireguard ferm variables
+  template: src=templates/ferm-vars.conf.j2 dest=/etc/ferm/vars.d/1100-wireguard.conf owner=root group=root
+  notify:
+    - ferm restart
+
+- name: check if reload-module-on-update is set
+  stat:
+    path: "{{ wireguard_directory }}/.reload-module-on-update"
+  register: wireguard_reload_module_on_update
+
+- name: set wireguard reload-module-on-update
+  file:
+    dest: "{{ wireguard_directory }}/.reload-module-on-update"
+    state: touch
+  when: not wireguard_reload_module_on_update.stat.exists
+
+- name: wireguard kresd configuration
+  template:
+    src: templates/915-view-wireguard.conf.j2
+    dest: /etc/knot-resolver/kresd.conf.d/915-view-wireguard.conf
+    owner: root
+    group: knot-resolver
+    mode: 0640
+  notify:
+    - kresd restart
+
+- name: enable wireguard service
+  service:
+    name: "wg-quick@{{ wireguard_interface }}"
+    enabled: yes

@@ -1,0 +1,3 @@
+@def $WIREGUARD_DEV = {{ wireguard_interface }};
+@def $WIREGUARD_CIDR = ({{ wireguard_networks | join(' ') }});
+@def $WIREGUARD_PORT = {{ wireguard_port }};
