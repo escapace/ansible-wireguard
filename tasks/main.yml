@@ -11,6 +11,8 @@
       - wireguard_networks | length == (wireguard_networks | ipv4 | length + wireguard_networks | ipv6 | length)
     quiet: true
   no_log: true
+  tags:
+  - wireguard
 
 - name: check wireguard peers
   assert:
@@ -20,6 +22,10 @@
     quiet: true
   loop: "{{ wireguard_peers }}"
   no_log: true
+  tags:
+  - wireguard
 
 - include_tasks: wireguard.yml
   when: ansible_os_family == "RedHat"
+  tags:
+  - wireguard

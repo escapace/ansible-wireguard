@@ -18,7 +18,7 @@ galaxy_info:
   - wireguard
 
 dependencies:
-   - { role: escapace.kresd }
-   - { role: escapace.ferm }
    - { role: escapace.epel }
    - { role: escapace.packagecloud }
+   - { role: escapace.ferm }
+   - { role: escapace.kresd }

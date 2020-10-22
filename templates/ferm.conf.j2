@@ -1,3 +1,10 @@
+@def &FORWARD_WIREGUARD($port) = {
+    domain (ip ip6) {
+        table filter chain INPUT interface ($DEFAULT_V4_DEV $DEFAULT_V6_DEV) proto udp dport $port ACCEPT;
+        table nat chain PREROUTING interface ($DEFAULT_V4_DEV $DEFAULT_V6_DEV) daddr ($DEFAULT_V4_IP $DEFAULT_V6_IP) proto udp dport $port REDIRECT to-ports $WIREGUARD_PORT;
+    }
+}
+
 domain (ip ip6) table filter {
     chain INPUT {
         interface $DEFAULT_V4_DEV proto udp dport $WIREGUARD_PORT ACCEPT;
@@ -9,7 +16,13 @@ domain (ip ip6) table filter {
     }
 }
 
+{% for port in wireguard_ports | difference([wireguard_ports | first]) %}
+&FORWARD_WIREGUARD({{ port }});
+{% endfor %}
+
 {% for peer in wireguard_peers %}
+{% if peer.forward | default(true) is not false %}
+
 {% if peer.networks | ipv4 | length > 0 %}
 domain ip table filter {
     chain INPUT {
@@ -40,5 +53,6 @@ domain ip6 table filter {
         mod conntrack ctstate (ESTABLISHED RELATED) daddr @ipfilter(({{ peer.networks | ipv6 | join(' ') }})) outerface $WIREGUARD_DEV interface !$WIREGUARD_DEV ACCEPT;
     }
 }
+{% endif %}
 {% endif %}
 {% endfor %}

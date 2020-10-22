@@ -9,6 +9,11 @@
     mode: 0644
   register: wireguard_repository
 
+# - name: enable wireguard copr
+#   command:
+#     cmd: yum copr enable -y jdoss/wireguard
+#     creates: /etc/yum.repos.d/_copr:copr.fedorainfracloud.org:jdoss:wireguard.repo
+
 - name: install wireguard
   package:
     name: "{{ packages }}"
@@ -39,6 +44,8 @@
   stat:
     path: "{{ wireguard_directory }}/{{ wireguard_interface }}.conf"
   register: wireguard_config_file_stat
+  tags:
+  - wireguard
 
 - block:
   - name: Generate WireGuard private key
@@ -49,6 +56,8 @@
     set_fact:
       wireguard_private_key: "{{ wireguard_private_key_result.stdout }}"
   when: not wireguard_config_file_stat.stat.exists
+  tags:
+  - wireguard
 
 - block:
   - name: read wireguard config file
@@ -60,21 +69,29 @@
     set_fact:
       wireguard_private_key: "{{ wireguard_config['content'] | b64decode | regex_findall('PrivateKey = (.*)') | first }}"
   when: wireguard_config_file_stat.stat.exists
+  tags:
+  - wireguard
 
 - name: derive wireguard public key
   shell: "echo '{{ wireguard_private_key }}' | wg pubkey" # noqa 306
   register: wireguard_public_key_result
   changed_when: false
+  tags:
+  - wireguard
 
 - name: set public key fact
   set_fact:
     wireguard_public_key: "{{ wireguard_public_key_result.stdout }}"
+  tags:
+  - wireguard
 
 - name: create wireguard configuration directory
   file:
     dest: "{{ wireguard_directory }}"
     state: directory
     mode: 0700
+  tags:
+  - wireguard
 
 - name: create the wireguard configuration file
   template:
@@ -85,27 +102,37 @@
     mode: 0600
   notify:
     - wireguard reconfigure
+  tags:
+  - wireguard
 
 - name: create the wireguard ferm configuration
   template: src=templates/ferm.conf.j2 dest=/etc/ferm/ferm.d/1100-wireguard.conf owner=root group=root
   notify:
     - ferm restart
+  tags:
+  - wireguard
 
 - name: create the wireguard ferm variables
   template: src=templates/ferm-vars.conf.j2 dest=/etc/ferm/vars.d/1100-wireguard.conf owner=root group=root
   notify:
     - ferm restart
+  tags:
+  - wireguard
 
 - name: check if reload-module-on-update is set
   stat:
     path: "{{ wireguard_directory }}/.reload-module-on-update"
   register: wireguard_reload_module_on_update
+  tags:
+  - wireguard
 
 - name: set wireguard reload-module-on-update
   file:
     dest: "{{ wireguard_directory }}/.reload-module-on-update"
     state: touch
   when: not wireguard_reload_module_on_update.stat.exists
+  tags:
+  - wireguard
 
 - name: wireguard kresd configuration
   template:
@@ -116,8 +143,16 @@
     mode: 0640
   notify:
     - kresd restart
+  tags:
+  - wireguard
 
 - name: enable wireguard service
   service:
     name: "wg-quick@{{ wireguard_interface }}"
     enabled: yes
+
+- include_tasks: peer.yml
+  loop: "{{ wireguard_peers }}"
+  when: wireguard_endpoints | length > 0
+  tags:
+  - wireguard

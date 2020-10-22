@@ -1,0 +1,36 @@
+# {{ item.name }}
+
+[Interface]
+PrivateKey = {{ item.private_key }}
+{% if item.networks | ipv4 | length > 0 and item.networks | ipv6 | length > 0 %}
+Address = {{ item.networks | ipv4 | first }},{{ item.networks | ipv6 | first }}
+{% elif item.networks | ipv4 | length > 0 %}
+Address = {{ item.networks | ipv4 | first }}
+{% elif item.networks | ipv6 | length > 0 %}
+Address = {{ item.networks | ipv6 | first }}
+{% endif %}
+{% if item.networks | ipv4 | length > 0 and item.networks | ipv6 | length > 0 %}
+DNS = {{ dummy_ipv4_cidr | ipaddr('network') | ipmath(1) }},{{ dummy_ipv6_cidr | ipaddr('network') | ipmath(1) }} 
+{% elif item.networks | ipv4 | length > 0 %}
+DNS = {{ dummy_ipv4_cidr | ipaddr('network') | ipmath(1) }}
+{% elif item.networks | ipv6 | length > 0 %}
+DNS = {{ dummy_ipv6_cidr | ipaddr('network') | ipmath(1) }} 
+{% endif %}
+
+[Peer]
+PublicKey = {{ wireguard_public_key }} 
+PresharedKey = {{ item.preshared_key }}
+{% if item.forward | default(true) and item.networks | ipv4 | length > 0 and item.networks | ipv6 | length > 0 %}
+AllowedIPs = 0.0.0.0/0, ::/0
+{% elif item.forward | default(true) and item.networks | ipv6 | length > 0 %}
+AllowedIPs = ::/0
+{% else %}
+AllowedIPs = 0.0.0.0/0
+{% endif %}
+Endpoint = {{ wireguard_endpoints | first }}:{{ wireguard_port }}
+{% for endpoint in wireguard_endpoints %}
+{% for port in wireguard_ports %}
+#Endpoint = {{ endpoint }}:{{ port }}
+{% endfor %}
+{% endfor %}
+PersistentKeepalive = 25
