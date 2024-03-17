@@ -1,5 +1,4 @@
 ---
-
 wireguard_endpoints: []
 wireguard_directory: /etc/wireguard
 wireguard_interface: wg0
