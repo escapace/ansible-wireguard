@@ -5,5 +5,5 @@ wireguard_directory: /etc/wireguard
 wireguard_interface: wg0
 wireguard_ports: [51820]
 wireguard_port: "{{ wireguard_ports | first }}"
-wireguard_networks: 
-wireguard_peers: 
+wireguard_networks:
+wireguard_peers:

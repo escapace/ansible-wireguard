@@ -1,12 +1,11 @@
 ---
-
 - name: Add WireGuard repository
-  get_url:
+  ansible.builtin.get_url:
     url: https://copr.fedorainfracloud.org/coprs/jdoss/wireguard/repo/epel-8/jdoss-wireguard-epel-8.repo
     dest: /etc/yum.repos.d/wireguard.repo
     owner: root
     group: root
-    mode: 0644
+    mode: "0644"
   register: wireguard_repository
 
 # - name: enable wireguard copr
@@ -15,144 +14,156 @@
 #     creates: /etc/yum.repos.d/_copr:copr.fedorainfracloud.org:jdoss:wireguard.repo
 
 - name: install wireguard
-  package:
+  ansible.builtin.package:
     name: "{{ packages }}"
     state: present
     update_cache: "{{ wireguard_repository.changed }}"
   vars:
     packages:
-    - wireguard-tools
-    - wireguard-dkms
+      - wireguard-tools
+      - wireguard-dkms
 
 - name: enable wireguard kernel module
-  lineinfile:
+  ansible.builtin.lineinfile:
     path: /etc/modules-load.d/wireguard.conf
     line: wireguard
     owner: root
     group: root
-    mode: 0644
-    create: yes
+    mode: "0644"
+    create: true
 
 - name: enable systemd-modules-load.service
-  service:
+  ansible.builtin.service:
     name: systemd-modules-load
     state: restarted
-    enabled: yes
+    enabled: true
   changed_when: false
 
 - name: register if config/private key already exists on target host
-  stat:
+  ansible.builtin.stat:
     path: "{{ wireguard_directory }}/{{ wireguard_interface }}.conf"
   register: wireguard_config_file_stat
   tags:
-  - wireguard
+    - wireguard
 
-- block:
-  - name: Generate WireGuard private key
-    shell: "wg genkey"
-    register: wireguard_private_key_result
-
-  - name: set private key fact
-    set_fact:
-      wireguard_private_key: "{{ wireguard_private_key_result.stdout }}"
-  when: not wireguard_config_file_stat.stat.exists
+- when: not wireguard_config_file_stat.stat.exists
   tags:
-  - wireguard
+    - wireguard
 
-- block:
-  - name: read wireguard config file
-    slurp:
-      src: "{{ wireguard_directory }}/{{ wireguard_interface }}.conf"
-    register: wireguard_config
+  block:
+    - name: Generate WireGuard private key
+      ansible.builtin.shell: wg genkey
+      register: wireguard_private_key_result
 
-  - name: set private key fact
-    set_fact:
-      wireguard_private_key: "{{ wireguard_config['content'] | b64decode | regex_findall('PrivateKey = (.*)') | first }}"
-  when: wireguard_config_file_stat.stat.exists
+    - name: set private key fact
+      ansible.builtin.set_fact:
+        wireguard_private_key: "{{ wireguard_private_key_result.stdout }}"
+- when: wireguard_config_file_stat.stat.exists
   tags:
-  - wireguard
+    - wireguard
+
+  block:
+    - name: read wireguard config file
+      ansible.builtin.slurp:
+        src: "{{ wireguard_directory }}/{{ wireguard_interface }}.conf"
+      register: wireguard_config
+
+    - name: set private key fact
+      ansible.builtin.set_fact:
+        wireguard_private_key: "{{ wireguard_config['content'] | b64decode | regex_findall('PrivateKey = (.*)') | first }}"
 
 - name: derive wireguard public key
-  shell: "echo '{{ wireguard_private_key }}' | wg pubkey" # noqa 306
+  ansible.builtin.shell: echo '{{ wireguard_private_key }}' | wg pubkey
   register: wireguard_public_key_result
   changed_when: false
   tags:
-  - wireguard
+    - wireguard
 
 - name: set public key fact
-  set_fact:
+  ansible.builtin.set_fact:
     wireguard_public_key: "{{ wireguard_public_key_result.stdout }}"
   tags:
-  - wireguard
+    - wireguard
 
 - name: create wireguard configuration directory
-  file:
+  ansible.builtin.file:
     dest: "{{ wireguard_directory }}"
     state: directory
-    mode: 0700
+    mode: "0700"
   tags:
-  - wireguard
+    - wireguard
 
 - name: create the wireguard configuration file
-  template:
+  ansible.builtin.template:
     src: wg.conf.j2
     dest: "{{ wireguard_directory }}/{{ wireguard_interface }}.conf"
     owner: root
     group: root
-    mode: 0600
+    mode: "0600"
   notify:
     - wireguard reconfigure
   tags:
-  - wireguard
+    - wireguard
 
 - name: create the wireguard ferm configuration
-  template: src=templates/ferm.conf.j2 dest=/etc/ferm/ferm.d/1100-wireguard.conf owner=root group=root
+  ansible.builtin.template:
+    src: templates/ferm.conf.j2
+    dest: /etc/ferm/ferm.d/1100-wireguard.conf
+    owner: root
+    group: root
+    mode: "0600"
   notify:
     - ferm restart
   tags:
-  - wireguard
+    - wireguard
 
 - name: create the wireguard ferm variables
-  template: src=templates/ferm-vars.conf.j2 dest=/etc/ferm/vars.d/1100-wireguard.conf owner=root group=root
+  ansible.builtin.template:
+    src: templates/ferm-vars.conf.j2
+    dest: /etc/ferm/vars.d/1100-wireguard.conf
+    owner: root
+    group: root
+    mode: "0600"
   notify:
     - ferm restart
   tags:
-  - wireguard
+    - wireguard
 
 - name: check if reload-module-on-update is set
-  stat:
+  ansible.builtin.stat:
     path: "{{ wireguard_directory }}/.reload-module-on-update"
   register: wireguard_reload_module_on_update
   tags:
-  - wireguard
+    - wireguard
 
 - name: set wireguard reload-module-on-update
-  file:
+  ansible.builtin.file:
     dest: "{{ wireguard_directory }}/.reload-module-on-update"
     state: touch
+    mode: "0755"
   when: not wireguard_reload_module_on_update.stat.exists
   tags:
-  - wireguard
+    - wireguard
 
 - name: wireguard kresd configuration
-  template:
+  ansible.builtin.template:
     src: templates/915-view-wireguard.conf.j2
     dest: /etc/knot-resolver/kresd.conf.d/915-view-wireguard.conf
     owner: root
     group: knot-resolver
-    mode: 0640
+    mode: "0640"
   notify:
     - kresd restart
   tags:
-  - wireguard
+    - wireguard
 
 - name: enable wireguard service
-  service:
-    name: "wg-quick@{{ wireguard_interface }}"
-    enabled: yes
+  ansible.builtin.service:
+    name: wg-quick@{{ wireguard_interface }}
+    enabled: true
 
-- include_tasks: peer.yml
+- ansible.builtin.include_tasks: peer.yml
   loop: "{{ wireguard_peers }}"
   when: wireguard_endpoints | length > 0
   tags:
-  - wireguard
+    - wireguard

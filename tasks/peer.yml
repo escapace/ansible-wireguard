@@ -1,36 +1,34 @@
 ---
-
-- block:
-  - name: create wireguard directory
-    file:
-      path: "{{ playbook_dir }}/wireguard"
-      state: directory
-      mode: '0755'
-
-  - name: create wireguard peer directory
-    file:
-      path: "{{ playbook_dir }}/wireguard/{{ item.name }}"
-      state: directory
-      mode: '0755'
-
-  - name: wireguard peer configuration
-    template:
-      src: templates/peer.conf.j2
-      dest: "{{ playbook_dir }}/wireguard/{{ item.name }}/wireguard.conf"
-      mode: 0644
-
-  - name: Generate QR codes
-    shell: >
-      umask 077;
-      which segno &&
-      segno --scale=5 --output=qr-code.png \
-        "{{ lookup('template', 'templates/peer.conf.j2') }}" || true
-    args:
-      chdir: "{{ playbook_dir }}/wireguard/{{ item.name }}"
-      executable: bash
-
-  delegate_to: localhost
+- delegate_to: localhost
   become: false
   when: item.name is string and item.private_key is string
   tags:
     - wireguard
+  block:
+    - name: create wireguard directory
+      ansible.builtin.file:
+        path: "{{ playbook_dir }}/wireguard"
+        state: directory
+        mode: "0755"
+
+    - name: create wireguard peer directory
+      ansible.builtin.file:
+        path: "{{ playbook_dir }}/wireguard/{{ item.name }}"
+        state: directory
+        mode: "0755"
+
+    - name: wireguard peer configuration
+      ansible.builtin.template:
+        src: templates/peer.conf.j2
+        dest: "{{ playbook_dir }}/wireguard/{{ item.name }}/wireguard.conf"
+        mode: "0644"
+
+    - name: Generate QR codes
+      ansible.builtin.shell: >
+        umask 077;
+        which segno &&
+        segno --scale=5 --output=qr-code.png \
+          "{{ lookup('template', 'templates/peer.conf.j2') }}" || true
+      args:
+        chdir: "{{ playbook_dir }}/wireguard/{{ item.name }}"
+        executable: bash

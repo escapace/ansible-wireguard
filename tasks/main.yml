@@ -1,7 +1,6 @@
 ---
-
 - name: check general wireguard settings
-  assert:
+  ansible.builtin.assert:
     that:
       - wireguard_port is string or wireguard_port is number
       - wireguard_interface is string and wireguard_interface | length > 0
@@ -12,10 +11,10 @@
     quiet: true
   no_log: true
   tags:
-  - wireguard
+    - wireguard
 
 - name: check wireguard peers
-  assert:
+  ansible.builtin.assert:
     that:
       - item.public_key is string and item.public_key | length > 0
       - item.networks is defined
@@ -23,9 +22,9 @@
   loop: "{{ wireguard_peers }}"
   no_log: true
   tags:
-  - wireguard
+    - wireguard
 
-- include_tasks: wireguard.yml
+- ansible.builtin.include_tasks: wireguard.yml
   when: ansible_os_family == "RedHat"
   tags:
-  - wireguard
+    - wireguard
